@@ -3,9 +3,10 @@ import pandas as pd
 import logging
 import joblib
 from sklearn.preprocessing import StandardScaler
-from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
+from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier, VotingClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.svm import SVC
+from sklearn.utils.class_weight import compute_class_weight
 from config import CLASSIFIER_CONFIG, RANDOM_SEED
 
 logging.basicConfig(level=logging.INFO)
@@ -55,20 +56,28 @@ class XGBoostClassifier:
         self.scaler = StandardScaler()
         self.is_fitted = False
         
-    def fit(self, X_train, y_train, X_val=None, y_val=None):
+    def fit(self, X_train, y_train, X_val=None, y_val=None, use_class_weights=True):
         """Train XGBoost or GradientBoosting model."""
         X_train_scaled = self.scaler.fit_transform(X_train)
+        
+        if use_class_weights:
+            classes = np.unique(y_train)
+            weights = compute_class_weight('balanced', classes=classes, y=y_train)
+            sample_weights = np.array([weights[int(y)] for y in y_train])
+        else:
+            sample_weights = None
         
         if self.is_xgboost and X_val is not None and y_val is not None:
             X_val_scaled = self.scaler.transform(X_val)
             eval_set = [(X_val_scaled, y_val)]
             self.model.fit(
                 X_train_scaled, y_train,
+                sample_weight=sample_weights,
                 eval_set=eval_set,
                 verbose=10
             )
         else:
-            self.model.fit(X_train_scaled, y_train)
+            self.model.fit(X_train_scaled, y_train, sample_weight=sample_weights)
         
         self.is_fitted = True
         logger.info("Gradient Boosting model trained successfully")
@@ -109,10 +118,18 @@ class AdaBoostClassifierModel:
         self.scaler = StandardScaler()
         self.is_fitted = False
         
-    def fit(self, X_train, y_train):
+    def fit(self, X_train, y_train, use_class_weights=True):
         """Train AdaBoost model."""
         X_train_scaled = self.scaler.fit_transform(X_train)
-        self.model.fit(X_train_scaled, y_train)
+        
+        if use_class_weights:
+            classes = np.unique(y_train)
+            weights = compute_class_weight('balanced', classes=classes, y=y_train)
+            sample_weights = np.array([weights[int(y)] for y in y_train])
+        else:
+            sample_weights = None
+        
+        self.model.fit(X_train_scaled, y_train, sample_weight=sample_weights)
         self.is_fitted = True
         logger.info("AdaBoost model trained successfully")
         
@@ -145,13 +162,18 @@ class DecisionTreeClassifierModel:
     
     def __init__(self, config=None):
         self.config = config or CLASSIFIER_CONFIG['decision_tree']
+        self.config['class_weight'] = 'balanced'
         self.model = DecisionTreeClassifier(**self.config)
         self.scaler = StandardScaler()
         self.is_fitted = False
         
-    def fit(self, X_train, y_train):
+    def fit(self, X_train, y_train, use_class_weights=True):
         """Train Decision Tree model."""
         X_train_scaled = self.scaler.fit_transform(X_train)
+        
+        if use_class_weights:
+            self.model.set_params(class_weight='balanced')
+        
         self.model.fit(X_train_scaled, y_train)
         self.is_fitted = True
         logger.info("Decision Tree model trained successfully")
@@ -185,13 +207,18 @@ class SVMClassifierModel:
     
     def __init__(self, config=None):
         self.config = config or CLASSIFIER_CONFIG['svm']
+        self.config['class_weight'] = 'balanced'
         self.model = SVC(**self.config)
         self.scaler = StandardScaler()
         self.is_fitted = False
         
-    def fit(self, X_train, y_train):
+    def fit(self, X_train, y_train, use_class_weights=True):
         """Train SVM model."""
         X_train_scaled = self.scaler.fit_transform(X_train)
+        
+        if use_class_weights:
+            self.model.set_params(class_weight='balanced')
+        
         self.model.fit(X_train_scaled, y_train)
         self.is_fitted = True
         logger.info("SVM model trained successfully")
@@ -321,6 +348,52 @@ class ANNClassifier:
         self.scaler = joblib.load(filepath)
         self.is_fitted = True
         logger.info(f"ANN model loaded from {filepath}")
+
+
+class EnsembleVotingClassifier:
+    """Ensemble Voting Classifier combining multiple models."""
+    
+    def __init__(self, models=None):
+        self.models = models or {}
+        self.voting_model = None
+        self.is_fitted = False
+        
+    def fit(self, X_train, y_train, X_val=None, y_val=None, use_class_weights=True):
+        """Train all models in the ensemble."""
+        estimators = []
+        
+        for name, model in self.models.items():
+            logger.info(f"Training {name}...")
+            
+            if hasattr(model, 'fit'):
+                if name in ['xgboost']:
+                    model.fit(X_train, y_train, X_val, y_val, use_class_weights)
+                else:
+                    model.fit(X_train, y_train, use_class_weights)
+                
+                estimators.append((name, model.model))
+        
+        if estimators:
+            self.voting_model = VotingClassifier(estimators=estimators, voting='soft')
+            self.voting_model.fit(X_train, y_train)
+            self.is_fitted = True
+            logger.info("Ensemble voting classifier trained successfully")
+    
+    def predict(self, X):
+        """Predict using ensemble voting."""
+        if self.voting_model is None:
+            raise ValueError("Model not fitted yet")
+        
+        scaled_X = self.models[list(self.models.keys())[0]].scaler.transform(X)
+        return self.voting_model.predict(scaled_X)
+    
+    def predict_proba(self, X):
+        """Predict probabilities using ensemble voting."""
+        if self.voting_model is None:
+            raise ValueError("Model not fitted yet")
+        
+        scaled_X = self.models[list(self.models.keys())[0]].scaler.transform(X)
+        return self.voting_model.predict_proba(scaled_X)
 
 
 class ModelFactory:

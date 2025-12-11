@@ -41,8 +41,24 @@ class RadiomicsFeatureExtractor:
         tumor_pixels = np.sum(mask)
         image_area = mask.shape[0] * mask.shape[1]
         features['tumor_area_ratio'] = tumor_pixels / (image_area + 1e-6)
-        
         features['tumor_area'] = tumor_pixels
+        
+        contours = cv2.findContours(mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours = contours[0] if len(contours) == 2 else contours[1]
+        
+        if len(contours) > 0:
+            cnt = max(contours, key=cv2.contourArea)
+            perimeter = cv2.arcLength(cnt, True)
+            features['perimeter'] = perimeter
+            features['circularity'] = (4 * np.pi * tumor_pixels) / ((perimeter ** 2) + 1e-6)
+            
+            hull = cv2.convexHull(cnt)
+            hull_area = cv2.contourArea(hull)
+            features['solidity'] = tumor_pixels / (hull_area + 1e-6)
+        else:
+            features['perimeter'] = 0
+            features['circularity'] = 0
+            features['solidity'] = 0
         
         return features
     
@@ -54,22 +70,41 @@ class RadiomicsFeatureExtractor:
         masked_image = image[mask > 0]
         
         features = {}
-        features['intensity_mean'] = np.mean(masked_image) if len(masked_image) > 0 else 0
-        features['intensity_std'] = np.std(masked_image) if len(masked_image) > 0 else 0
-        features['intensity_max'] = np.max(masked_image) if len(masked_image) > 0 else 0
-        features['intensity_min'] = np.min(masked_image) if len(masked_image) > 0 else 0
-        features['intensity_median'] = np.median(masked_image) if len(masked_image) > 0 else 0
-        
         if len(masked_image) > 0:
+            features['intensity_mean'] = np.mean(masked_image)
+            features['intensity_std'] = np.std(masked_image)
+            features['intensity_max'] = np.max(masked_image)
+            features['intensity_min'] = np.min(masked_image)
+            features['intensity_median'] = np.median(masked_image)
             features['intensity_range'] = features['intensity_max'] - features['intensity_min']
             features['intensity_iqr'] = np.percentile(masked_image, 75) - np.percentile(masked_image, 25)
             features['intensity_energy'] = np.sum(masked_image ** 2)
             features['intensity_entropy'] = self._calculate_entropy(masked_image)
+            
+            features['intensity_skewness'] = self._calculate_skewness(masked_image)
+            features['intensity_kurtosis'] = self._calculate_kurtosis(masked_image)
+            features['intensity_variance'] = np.var(masked_image)
+            features['intensity_sum'] = np.sum(masked_image)
+            features['intensity_q1'] = np.percentile(masked_image, 25)
+            features['intensity_q3'] = np.percentile(masked_image, 75)
+            features['intensity_rmse'] = np.sqrt(np.mean(masked_image ** 2))
         else:
+            features['intensity_mean'] = 0
+            features['intensity_std'] = 0
+            features['intensity_max'] = 0
+            features['intensity_min'] = 0
+            features['intensity_median'] = 0
             features['intensity_range'] = 0
             features['intensity_iqr'] = 0
             features['intensity_energy'] = 0
             features['intensity_entropy'] = 0
+            features['intensity_skewness'] = 0
+            features['intensity_kurtosis'] = 0
+            features['intensity_variance'] = 0
+            features['intensity_sum'] = 0
+            features['intensity_q1'] = 0
+            features['intensity_q3'] = 0
+            features['intensity_rmse'] = 0
         
         return features
     
@@ -170,10 +205,32 @@ class RadiomicsFeatureExtractor:
     
     def _calculate_entropy(self, data, bins=256):
         """Calculate entropy of data."""
-        hist, _ = np.histogram(data, bins=bins, range=(data.min(), data.max()))
+        hist, _ = np.histogram(data, bins=bins, range=(data.min(), data.max() + 1e-6))
         hist = hist / len(data)
         entropy = -np.sum(hist * np.log(hist + 1e-6))
         return entropy
+    
+    def _calculate_skewness(self, data):
+        """Calculate skewness of data."""
+        if len(data) < 2:
+            return 0
+        mean = np.mean(data)
+        std = np.std(data)
+        if std < 1e-6:
+            return 0
+        skewness = np.mean(((data - mean) / std) ** 3)
+        return skewness
+    
+    def _calculate_kurtosis(self, data):
+        """Calculate kurtosis of data."""
+        if len(data) < 2:
+            return 0
+        mean = np.mean(data)
+        std = np.std(data)
+        if std < 1e-6:
+            return 0
+        kurtosis = np.mean(((data - mean) / std) ** 4) - 3
+        return kurtosis
     
     def extract_all_features(self, image, mask=None):
         """Extract all radiomics features from image."""

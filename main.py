@@ -104,7 +104,8 @@ class BrainTumorPipeline:
             input_shape=UNET_CONFIG['input_shape'],
             num_classes=UNET_CONFIG['num_classes'],
             filters_start=UNET_CONFIG['filters_start'],
-            dropout_rate=UNET_CONFIG['dropout_rate']
+            dropout_rate=UNET_CONFIG['dropout_rate'],
+            use_batch_norm=UNET_CONFIG.get('use_batch_norm', True)
         )
         
         self.unet_model = compile_unet_model(
@@ -166,7 +167,7 @@ class BrainTumorPipeline:
             'y_test': self.y_test,
         }
         
-        predictions, probabilities, y_test = trainer.train_all_models(data)
+        predictions, probabilities, y_test = trainer.train_all_models(data, use_class_weights=True)
         self.results = trainer.results
         self.trainer = trainer
         

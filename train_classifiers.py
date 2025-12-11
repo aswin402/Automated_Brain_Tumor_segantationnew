@@ -88,14 +88,14 @@ class ClassifierTrainer:
             'features_test': features_test,
         }
     
-    def train_xgboost(self, X_train, y_train, X_val, y_val, X_test, y_test):
+    def train_xgboost(self, X_train, y_train, X_val, y_val, X_test, y_test, use_class_weights=True):
         """Train XGBoost classifier."""
         logger.info("\n" + "="*80)
-        logger.info("TRAINING: XGBoost Classifier")
+        logger.info("TRAINING: XGBoost Classifier (with Class Weights)")
         logger.info("="*80)
         
         model = ModelFactory.create_xgboost()
-        model.fit(X_train, y_train, X_val, y_val)
+        model.fit(X_train, y_train, X_val, y_val, use_class_weights=use_class_weights)
         
         y_pred = model.predict(X_test)
         y_proba = model.predict_proba(X_test)
@@ -112,14 +112,14 @@ class ClassifierTrainer:
         
         return y_pred, y_proba
     
-    def train_adaboost(self, X_train, y_train, X_test, y_test):
+    def train_adaboost(self, X_train, y_train, X_test, y_test, use_class_weights=True):
         """Train AdaBoost classifier."""
         logger.info("\n" + "="*80)
-        logger.info("TRAINING: AdaBoost Classifier")
+        logger.info("TRAINING: AdaBoost Classifier (with Class Weights)")
         logger.info("="*80)
         
         model = ModelFactory.create_adaboost()
-        model.fit(X_train, y_train)
+        model.fit(X_train, y_train, use_class_weights=use_class_weights)
         
         y_pred = model.predict(X_test)
         y_proba = model.predict_proba(X_test)
@@ -136,14 +136,14 @@ class ClassifierTrainer:
         
         return y_pred, y_proba
     
-    def train_decision_tree(self, X_train, y_train, X_test, y_test):
+    def train_decision_tree(self, X_train, y_train, X_test, y_test, use_class_weights=True):
         """Train Decision Tree classifier."""
         logger.info("\n" + "="*80)
-        logger.info("TRAINING: Decision Tree Classifier")
+        logger.info("TRAINING: Decision Tree Classifier (with Class Weights)")
         logger.info("="*80)
         
         model = ModelFactory.create_decision_tree()
-        model.fit(X_train, y_train)
+        model.fit(X_train, y_train, use_class_weights=use_class_weights)
         
         y_pred = model.predict(X_test)
         y_proba = model.predict_proba(X_test)
@@ -160,14 +160,14 @@ class ClassifierTrainer:
         
         return y_pred, y_proba
     
-    def train_svm(self, X_train, y_train, X_test, y_test):
+    def train_svm(self, X_train, y_train, X_test, y_test, use_class_weights=True):
         """Train SVM classifier."""
         logger.info("\n" + "="*80)
-        logger.info("TRAINING: Support Vector Machine (SVM)")
+        logger.info("TRAINING: Support Vector Machine (SVM) (with Class Weights)")
         logger.info("="*80)
         
         model = ModelFactory.create_svm()
-        model.fit(X_train, y_train)
+        model.fit(X_train, y_train, use_class_weights=use_class_weights)
         
         y_pred = model.predict(X_test)
         y_proba = model.predict_proba(X_test)
@@ -210,10 +210,12 @@ class ClassifierTrainer:
         
         return y_pred, y_proba
     
-    def train_all_models(self, data):
+    def train_all_models(self, data, use_class_weights=True):
         """Train all classifiers."""
         logger.info("\n" + "="*80)
         logger.info("TRAINING ALL CLASSIFIERS")
+        if use_class_weights:
+            logger.info("Using class weights for imbalanced dataset handling")
         logger.info("="*80)
         
         X_train = data['X_train']
@@ -227,19 +229,19 @@ class ClassifierTrainer:
         predictions = {}
         probabilities = {}
         
-        y_pred_xgb, y_proba_xgb = self.train_xgboost(X_train, y_train, X_val, y_val, X_test, y_test)
+        y_pred_xgb, y_proba_xgb = self.train_xgboost(X_train, y_train, X_val, y_val, X_test, y_test, use_class_weights)
         predictions['XGBoost'] = y_pred_xgb
         probabilities['XGBoost'] = y_proba_xgb
         
-        y_pred_ada, y_proba_ada = self.train_adaboost(X_train, y_train, X_test, y_test)
+        y_pred_ada, y_proba_ada = self.train_adaboost(X_train, y_train, X_test, y_test, use_class_weights)
         predictions['AdaBoost'] = y_pred_ada
         probabilities['AdaBoost'] = y_proba_ada
         
-        y_pred_dt, y_proba_dt = self.train_decision_tree(X_train, y_train, X_test, y_test)
+        y_pred_dt, y_proba_dt = self.train_decision_tree(X_train, y_train, X_test, y_test, use_class_weights)
         predictions['Decision Tree'] = y_pred_dt
         probabilities['Decision Tree'] = y_proba_dt
         
-        y_pred_svm, y_proba_svm = self.train_svm(X_train, y_train, X_test, y_test)
+        y_pred_svm, y_proba_svm = self.train_svm(X_train, y_train, X_test, y_test, use_class_weights)
         predictions['SVM'] = y_pred_svm
         probabilities['SVM'] = y_proba_svm
         

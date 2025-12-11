@@ -42,22 +42,30 @@ if TENSORFLOW_AVAILABLE:
 
     class UNet:
         def __init__(self, input_shape=(256, 256, 1), num_classes=1, filters_start=32, 
-                     dropout_rate=0.5):
+                     dropout_rate=0.3, use_batch_norm=True):
             self.input_shape = input_shape
             self.num_classes = num_classes
             self.filters_start = filters_start
             self.dropout_rate = dropout_rate
+            self.use_batch_norm = use_batch_norm
             
         def conv_block(self, inputs, filters, kernel_size=3, activation='relu', padding='same'):
-            """Convolutional block with batch normalization."""
-            x = layers.Conv2D(filters, kernel_size, padding=padding, activation=None)(inputs)
-            x = layers.BatchNormalization()(x)
+            """Convolutional block with batch normalization and residual connection."""
+            x = layers.Conv2D(filters, kernel_size, padding=padding, activation=None, 
+                             kernel_regularizer=keras.regularizers.l2(1e-4))(inputs)
+            if self.use_batch_norm:
+                x = layers.BatchNormalization()(x)
             x = layers.Activation(activation)(x)
             
-            x = layers.Conv2D(filters, kernel_size, padding=padding, activation=None)(x)
-            x = layers.BatchNormalization()(x)
-            x = layers.Activation(activation)(x)
+            x = layers.Conv2D(filters, kernel_size, padding=padding, activation=None,
+                             kernel_regularizer=keras.regularizers.l2(1e-4))(x)
+            if self.use_batch_norm:
+                x = layers.BatchNormalization()(x)
             
+            if inputs.shape[-1] == filters:
+                x = layers.Add()([x, inputs])
+            
+            x = layers.Activation(activation)(x)
             return x
         
         def encoder_block(self, inputs, filters):
@@ -77,7 +85,7 @@ if TENSORFLOW_AVAILABLE:
             return conv
         
         def build(self):
-            """Build U-Net architecture."""
+            """Build enhanced U-Net architecture with 5 levels."""
             inputs = layers.Input(shape=self.input_shape)
             
             # Encoder
@@ -86,19 +94,23 @@ if TENSORFLOW_AVAILABLE:
             conv2, pool2 = self.encoder_block(pool1, self.filters_start * 2)
             conv3, pool3 = self.encoder_block(pool2, self.filters_start * 4)
             conv4, pool4 = self.encoder_block(pool3, self.filters_start * 8)
+            conv5, pool5 = self.encoder_block(pool4, self.filters_start * 16)
             
             # Bottleneck
             logger.info("Building U-Net bottleneck...")
-            conv5 = self.conv_block(pool4, self.filters_start * 16)
-            conv5 = layers.Dropout(self.dropout_rate)(conv5)
+            conv_bn = self.conv_block(pool5, self.filters_start * 32)
+            conv_bn = layers.Dropout(self.dropout_rate * 0.8)(conv_bn)
             
             # Decoder
             logger.info("Building U-Net decoder...")
-            dec4 = self.decoder_block(conv5, conv4, self.filters_start * 8)
-            dec4 = layers.Dropout(self.dropout_rate)(dec4)
+            dec5 = self.decoder_block(conv_bn, conv5, self.filters_start * 16)
+            dec5 = layers.Dropout(self.dropout_rate * 0.7)(dec5)
+            
+            dec4 = self.decoder_block(dec5, conv4, self.filters_start * 8)
+            dec4 = layers.Dropout(self.dropout_rate * 0.6)(dec4)
             
             dec3 = self.decoder_block(dec4, conv3, self.filters_start * 4)
-            dec3 = layers.Dropout(self.dropout_rate)(dec3)
+            dec3 = layers.Dropout(self.dropout_rate * 0.5)(dec3)
             
             dec2 = self.decoder_block(dec3, conv2, self.filters_start * 2)
             dec1 = self.decoder_block(dec2, conv1, self.filters_start)
@@ -116,10 +128,11 @@ if TENSORFLOW_AVAILABLE:
 
 
     def build_unet_model(input_shape=(256, 256, 1), num_classes=1, filters_start=32, 
-                         dropout_rate=0.5):
+                         dropout_rate=0.3, use_batch_norm=True):
         """Build and return U-Net model."""
         unet = UNet(input_shape=input_shape, num_classes=num_classes, 
-                    filters_start=filters_start, dropout_rate=dropout_rate)
+                    filters_start=filters_start, dropout_rate=dropout_rate,
+                    use_batch_norm=use_batch_norm)
         return unet.build()
 
 

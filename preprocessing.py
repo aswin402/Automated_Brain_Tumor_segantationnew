@@ -54,11 +54,43 @@ class ImagePreprocessor:
         denoised = cv2.bilateralFilter(image, 9, 75, 75)
         return denoised / 255.0
     
+    def apply_clahe(self, image):
+        """Apply CLAHE (Contrast Limited Adaptive Histogram Equalization)."""
+        if image.dtype != np.uint8:
+            image = (image * 255).astype(np.uint8)
+        
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        enhanced = clahe.apply(image)
+        return enhanced / 255.0
+    
+    def adaptive_histogram_equalization(self, image):
+        """Apply adaptive histogram equalization for better contrast."""
+        if image.dtype != np.uint8:
+            image = (image * 255).astype(np.uint8)
+        
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+        opening = cv2.morphologyEx(image, cv2.MORPH_OPEN, kernel)
+        sure_bg = cv2.dilate(opening, kernel, iterations=3)
+        
+        dist_transform = cv2.distanceTransform(opening, cv2.DIST_L2, cv2.DIST_MASK_PRECISE)
+        _, sure_fg = cv2.threshold(dist_transform, 0.7 * dist_transform.max(), 255, 0)
+        sure_fg = np.uint8(sure_fg)
+        
+        result = cv2.addWeighted(image, 0.7, sure_bg, 0.3, 0)
+        return result / 255.0
+    
     def preprocess_single_image(self, image):
         """Complete preprocessing pipeline for a single image."""
         image = self.resize_image(image)
         image = self.skull_strip_simple(image)
         image = self.remove_noise(image)
+        
+        if PREPROCESSING_CONFIG.get('clahe_enabled', False):
+            image = self.apply_clahe(image)
+        
+        if PREPROCESSING_CONFIG.get('adaptive_histogram', False):
+            image = self.adaptive_histogram_equalization(image)
+        
         image = self.normalize_intensity(image)
         return image.astype(np.float32)
     
