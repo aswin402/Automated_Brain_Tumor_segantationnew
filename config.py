@@ -89,6 +89,35 @@ CLASSIFIER_CONFIG = {
     },
 }
 
+TRANSFER_LEARNING_CONFIG = {
+    'image_size': (300, 300),
+    'input_channels': 3,
+    'batch_size': 32,
+    'epochs_stage_1': 20,
+    'epochs_stage_2': 40,
+    'base_model': 'EfficientNetB3',
+    'dropout_rate': 0.4,
+    'learning_rate': 0.0001,
+    'fine_tune_learning_rate': 1e-05,
+    'fine_tune_at': 380,
+    'label_smoothing': 0.1,
+    'use_mixup': True,
+    'mixup_alpha': 0.2,
+    'use_cutmix': False,
+    'cutmix_alpha': 1.0,
+    'tta_runs': 8,
+    'augmentations': {
+        'rotation': 25,
+        'width_shift': 0.1,
+        'height_shift': 0.1,
+        'zoom': 0.15,
+        'brightness_delta': 0.15,
+        'contrast_delta': 0.15,
+        'hue_delta': 0.02,
+        'saturation_delta': 0.2,
+    },
+}
+
 RADIOMICS_CONFIG = {
     'bin_width': 25,
     'force_2d': True,
