@@ -423,6 +423,8 @@ class TransferLearningClassifier:
         image = tf.expand_dims(image, -1)
         image = tf.image.grayscale_to_rgb(image)
         image = tf.image.resize(image, self.config['image_size'])
+        scale = tf.cond(tf.reduce_max(image) <= 1.5, lambda: tf.constant(255.0), lambda: tf.constant(1.0))
+        image = image * scale
         return image
     
     def _apply_color_jitter(self, image):
@@ -500,7 +502,7 @@ class TransferLearningClassifier:
             layer.trainable = False
         self._recompile(self.config['fine_tune_learning_rate'])
     
-    def fit(self, X_train, y_train, X_val, y_val, checkpoint_path=None, verbose=1):
+    def fit(self, X_train, y_train, X_val, y_val, checkpoint_path=None, verbose=1, class_weight=None):
         train_ds = self._dataset(X_train, y_train, training=True)
         val_ds = self._dataset(X_val, y_val, training=False)
         callbacks = [
@@ -521,7 +523,8 @@ class TransferLearningClassifier:
             validation_data=val_ds,
             epochs=self.config['epochs_stage_1'],
             verbose=verbose,
-            callbacks=callbacks
+            callbacks=callbacks,
+            class_weight=class_weight
         )
         self.history['stage_1'] = history_stage_1.history
         self.fine_tune()
@@ -530,7 +533,8 @@ class TransferLearningClassifier:
             validation_data=val_ds,
             epochs=self.config['epochs_stage_2'],
             verbose=verbose,
-            callbacks=callbacks
+            callbacks=callbacks,
+            class_weight=class_weight
         )
         self.history['stage_2'] = history_stage_2.history
         self.is_fitted = True
