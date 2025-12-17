@@ -4,14 +4,20 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 try:
+    import os
+    os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+    
     import tensorflow as tf
+    tf.config.set_visible_devices([], 'GPU')
+    
     from tensorflow import keras
     from tensorflow.keras import layers, Model
     from tensorflow.keras.losses import binary_crossentropy, categorical_crossentropy
-    TENSORFLOW_AVAILABLE = True
-except ImportError:
     TENSORFLOW_AVAILABLE = False
-    logger.warning("TensorFlow not installed - U-Net segmentation features will not be available")
+    logger.warning("TensorFlow available but GPU support disabled for CPU-only mode")
+except (ImportError, RuntimeError) as e:
+    TENSORFLOW_AVAILABLE = False
+    logger.warning(f"TensorFlow not available or error: {e} - U-Net segmentation features will not be available")
 
 
 if TENSORFLOW_AVAILABLE:

@@ -618,3 +618,36 @@ If you use this code in your research, please cite:
 
 **Last Updated**: December 2024
 **Status**: Production Ready
+
+
+# Test single image
+python3 quick_inference.py Testing1/glioma/Te-gl_0010.jpg
+
+# Test batch folder
+python3 quick_inference.py Testing1/meningioma/
+
+
+mkdir ~/my_mri_scans
+# Copy your MRI images here
+cp /path/to/your/scans/*.jpg ~/my_mri_scans/
+
+# Run detection
+python3 quick_inference.py ~/my_mri_scans/
+
+
+
+# Single image
+python3 quick_inference.py Testing1/glioma/Te-gl_0010.jpg
+
+# Glioma folder (300 images)
+python3 quick_inference.py Testing1/glioma/
+
+# Meningioma folder (306 images)
+python3 quick_inference.py Testing1/meningioma/
+
+# No tumor folder (405 images)
+python3 quick_inference.py Testing1/notumor/
+
+# Pituitary folder (300 images)
+python3 quick_inference.py Testing1/pituitary/
+

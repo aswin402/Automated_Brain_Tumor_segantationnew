@@ -248,16 +248,38 @@ class RadiomicsFeatureExtractor:
         return features
 
 
-def extract_features_batch(images, masks=None, feature_names=None):
-    """Extract features from a batch of images."""
+def _extract_single_image_features(args):
+    """Helper function for multiprocessing feature extraction."""
+    idx, image, mask = args
+    extractor = RadiomicsFeatureExtractor(bin_width=RADIOMICS_CONFIG['bin_width'])
+    return extractor.extract_all_features(image, mask)
+
+
+def extract_features_batch(images, masks=None, feature_names=None, n_jobs=4):
+    """Extract features from a batch of images (with multiprocessing for CPU)."""
     extractor = RadiomicsFeatureExtractor(bin_width=RADIOMICS_CONFIG['bin_width'])
     
     all_features = []
     
-    for idx, image in enumerate(images):
-        mask = None if masks is None else masks[idx]
-        features = extractor.extract_all_features(image, mask)
-        all_features.append(features)
+    try:
+        from multiprocessing import Pool
+        
+        logger.info(f"Using multiprocessing with {n_jobs} workers")
+        
+        task_args = []
+        for idx, image in enumerate(images):
+            mask = None if masks is None else masks[idx]
+            task_args.append((idx, image, mask))
+        
+        with Pool(processes=n_jobs) as pool:
+            all_features = pool.map(_extract_single_image_features, task_args)
+    
+    except Exception as e:
+        logger.warning(f"Multiprocessing failed ({e}), falling back to sequential extraction")
+        for idx, image in enumerate(images):
+            mask = None if masks is None else masks[idx]
+            features = extractor.extract_all_features(image, mask)
+            all_features.append(features)
     
     df = pd.DataFrame(all_features)
     
