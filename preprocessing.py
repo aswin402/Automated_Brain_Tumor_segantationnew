@@ -226,24 +226,10 @@ class PreprocessingPipeline:
             logger.info("Augmenting training data...")
             X_train, y_train = self.augmenter.augment_batch(X_train, y_train, augmentation_factor=1)
         
-        X_train_flat = X_train.reshape(X_train.shape[0], -1)
-        X_val_flat = X_val.reshape(X_val.shape[0], -1)
-        X_test_flat = X_test.reshape(X_test.shape[0], -1)
+        # NOTE: Pixel-level StandardScaler removed to ensure consistency with inference
+        # which uses [0, 1] normalization only.
         
-        self.scaler.fit(X_train_flat)
-        X_train_scaled = self.scaler.transform(X_train_flat)
-        X_val_scaled = self.scaler.transform(X_val_flat)
-        X_test_scaled = self.scaler.transform(X_test_flat)
-        
-        X_train_scaled = X_train_scaled.reshape(X_train.shape)
-        X_val_scaled = X_val_scaled.reshape(X_val.shape)
-        X_test_scaled = X_test_scaled.reshape(X_test.shape)
-        
-        logger.info(f"Preprocessed training: {X_train_scaled.shape}")
-        logger.info(f"Preprocessed validation: {X_val_scaled.shape}")
-        logger.info(f"Preprocessed testing: {X_test_scaled.shape}")
-        
-        return X_train_scaled, X_val_scaled, X_test_scaled, y_train
+        return X_train, X_val, X_test, y_train
 
 
 def prepare_image_for_segmentation(image, size=(256, 256)):

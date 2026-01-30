@@ -84,27 +84,35 @@ class CPUBrainTumorPipeline:
         return self.X_train, self.X_val, self.X_test
     
     def step_3_extract_features(self):
-        """Step 3: Extract radiomics features (CPU-efficient)."""
-        self.log_section("STEP 3: EXTRACTING RADIOMICS FEATURES")
-        
-        logger.info("Extracting features from training set...")
-        self.features_train, _ = extract_features_batch(self.X_train)
-        
-        logger.info("Extracting features from validation set...")
-        self.features_val, _ = extract_features_batch(self.X_val)
-        
-        logger.info("Extracting features from test set...")
-        self.features_test, _ = extract_features_batch(self.X_test)
+        """Step 3: Extract or load radiomics features (CPU-efficient)."""
+        self.log_section("STEP 3: RADIOMICS FEATURES")
         
         features_train_path = os.path.join(PATHS['features_dir'], 'features_train.csv')
         features_val_path = os.path.join(PATHS['features_dir'], 'features_val.csv')
         features_test_path = os.path.join(PATHS['features_dir'], 'features_test.csv')
         
-        save_features_to_csv(self.features_train, features_train_path)
-        save_features_to_csv(self.features_val, features_val_path)
-        save_features_to_csv(self.features_test, features_test_path)
+        # Check if features already exist to save time on low-spec systems
+        if all(os.path.exists(p) for p in [features_train_path, features_val_path, features_test_path]):
+            logger.info("Existing feature files found. Loading from CSV to save time...")
+            import pandas as pd
+            self.features_train = pd.read_csv(features_train_path)
+            self.features_val = pd.read_csv(features_val_path)
+            self.features_test = pd.read_csv(features_test_path)
+        else:
+            logger.info("Extracting features from training set...")
+            self.features_train, _ = extract_features_batch(self.X_train)
+            
+            logger.info("Extracting features from validation set...")
+            self.features_val, _ = extract_features_batch(self.X_val)
+            
+            logger.info("Extracting features from test set...")
+            self.features_test, _ = extract_features_batch(self.X_test)
+            
+            save_features_to_csv(self.features_train, features_train_path)
+            save_features_to_csv(self.features_val, features_val_path)
+            save_features_to_csv(self.features_test, features_test_path)
         
-        logger.info(f"Extracted {self.features_train.shape[1]} features")
+        logger.info(f"Loaded {self.features_train.shape[1]} features")
         logger.info(f"Training set: {self.features_train.shape[0]} samples")
         logger.info(f"Validation set: {self.features_val.shape[0]} samples")
         logger.info(f"Testing set: {self.features_test.shape[0]} samples")

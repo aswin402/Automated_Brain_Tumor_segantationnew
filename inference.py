@@ -21,10 +21,21 @@ class BrainTumorInference:
     
     def __init__(self, model_type='xgboost', class_names=None):
         self.model_type = model_type
-        self.class_names = class_names or ['no_tumor', 'glioma_tumor', 'meningioma_tumor', 'pituitary_tumor']
+        # Match class names exactly as used during training in config.py
+        from config import DATA_CONFIG, RADIOMICS_CONFIG, PATHS
+        self.class_names = class_names or DATA_CONFIG['classes']
         self.preprocessor = ImagePreprocessor(target_size=(256, 256))
-        self.feature_extractor = RadiomicsFeatureExtractor()
+        self.feature_extractor = RadiomicsFeatureExtractor(bin_width=RADIOMICS_CONFIG['bin_width'])
         self.model = None
+        
+        # Load feature names to ensure column alignment
+        features_path = os.path.join(PATHS['features_dir'], 'features_train.csv')
+        if os.path.exists(features_path):
+            import pandas as pd
+            df_cols = pd.read_csv(features_path, nrows=0)
+            self.feature_columns = df_cols.columns.tolist()
+        else:
+            self.feature_columns = None
         
     def load_model(self, model_path=None):
         """Load trained classifier."""
@@ -33,6 +44,13 @@ class BrainTumorInference:
         
         logger.info(f"Loading {self.model_type} model from {model_path}")
         
+        if self.model_type == 'ensemble':
+            import joblib
+            self.ensemble_data = joblib.load(model_path)
+            self.model = self.ensemble_data # Wrapper
+            logger.info("Ensemble model loaded successfully")
+            return self.model
+
         if self.model_type == 'xgboost':
             self.model = ModelFactory.create_xgboost()
         elif self.model_type == 'adaboost':
@@ -64,11 +82,36 @@ class BrainTumorInference:
         
         # Extract features
         features = self.feature_extractor.extract_all_features(processed_image)
-        features_array = np.array(list(features.values())).reshape(1, -1)
+        
+        # Ensure exact column alignment with training data
+        if self.feature_columns:
+            features_list = [features.get(col, 0) for col in self.feature_columns]
+            features_array = np.array(features_list).reshape(1, -1)
+        else:
+            features_array = np.array(list(features.values())).reshape(1, -1)
         
         # Predict
-        prediction = self.model.predict(features_array)[0]
-        probability = self.model.predict_proba(features_array)[0]
+        if self.model_type == 'ensemble':
+            # Use Stacking meta-model if available, otherwise fallback to weights
+            models = self.ensemble_data['models']
+            
+            p_xgb = models['xgboost'].predict_proba(features_array)
+            p_ann = models['ann'].predict_proba(features_array)
+            p_svm = models['svm'].predict_proba(features_array)
+            
+            if 'meta_model' in self.ensemble_data:
+                X_meta = np.hstack([p_xgb, p_ann, p_svm])
+                probability = self.ensemble_data['meta_model'].predict_proba(X_meta)[0]
+                prediction = np.argmax(probability)
+            else:
+                weights = self.ensemble_data.get('weights', {'xgboost': 0.33, 'ann': 0.33, 'svm': 0.34})
+                probability = (weights['xgboost'] * p_xgb[0] + 
+                               weights['ann'] * p_ann[0] + 
+                               weights['svm'] * p_svm[0])
+                prediction = np.argmax(probability)
+        else:
+            prediction = self.model.predict(features_array)[0]
+            probability = self.model.predict_proba(features_array)[0]
         
         result = {
             'image_path': image_path,

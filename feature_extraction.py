@@ -32,11 +32,21 @@ class RadiomicsFeatureExtractor:
             features['region_size_std'] = np.std(region_sizes)
             features['region_size_max'] = np.max(region_sizes)
             features['region_size_min'] = np.min(region_sizes)
+            
+            # Add centroid features (normalized position)
+            # This helps distinguish tumors based on location (e.g., Pituitary)
+            largest_label = np.argmax(region_sizes) + 1
+            coords = np.argwhere(labeled == largest_label)
+            centroid_y, centroid_x = coords.mean(axis=0)
+            features['centroid_x'] = centroid_x / mask.shape[1]
+            features['centroid_y'] = centroid_y / mask.shape[0]
         else:
             features['region_size_mean'] = 0
             features['region_size_std'] = 0
             features['region_size_max'] = 0
             features['region_size_min'] = 0
+            features['centroid_x'] = 0.5
+            features['centroid_y'] = 0.5
         
         tumor_pixels = np.sum(mask)
         image_area = mask.shape[0] * mask.shape[1]
